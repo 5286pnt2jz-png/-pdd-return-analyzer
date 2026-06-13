@@ -1,0 +1,28 @@
+# 数据文件（含用户隐私）
+data/
+*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.spec
+
+# 打包文件
+*.exe
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo

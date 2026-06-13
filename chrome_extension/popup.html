@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 380px; padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    font-size: 13px; color: #1d1d1f; background: #f5f5f7;
+  }
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .header-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 16px; font-weight: 700;
+  }
+  .header h3 { font-size: 15px; font-weight: 600; }
+  .header p { font-size: 11px; color: #86868b; margin-top: 1px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500;
+    margin-bottom: 12px;
+  }
+  .pill.ok { background: #d4edda; color: #155724; }
+  .pill.warn { background: #fff3cd; color: #856404; }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .pill.ok .dot { background: #28a745; }
+  .pill.warn .dot { background: #ffc107; }
+  .card {
+    background: #fff; border-radius: 14px; padding: 14px;
+    margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card-title {
+    font-size: 11px; color: #86868b; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 8px; font-weight: 600;
+  }
+  .row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0;
+  }
+  .row:not(:last-child) { border-bottom: 1px solid #f0f0f2; }
+  .row-label { color: #86868b; font-size: 13px; }
+  .row-value {
+    font-size: 13px; font-weight: 500; color: #1d1d1f;
+    text-align: right; max-width: 230px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .row-value.red { color: #e74c3c; font-weight: 600; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+  .tag.green { background: #e8f5e9; color: #2e7d32; }
+  .tag.orange { background: #fff8e1; color: #f57f17; }
+  .empty { font-size: 12px; color: #c7c7cc; }
+  .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+  .btn {
+    flex: 1; padding: 9px; border: none; border-radius: 10px;
+    font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: #e74c3c; color: white; }
+  .btn-secondary { background: #e5e5ea; color: #1d1d1f; }
+  .btn-purple { background: #6c5ce7; color: white; }
+  .btn-green { background: #27ae60; color: white; }
+  .tip {
+    font-size: 11px; color: #86868b; line-height: 1.5;
+    padding: 10px; background: #fff; border-radius: 10px;
+    margin-top: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .tip b { color: #1d1d1f; }
+  .history-item {
+    padding: 6px 0; border-bottom: 1px solid #f0f0f2;
+    display: flex; justify-content: space-between; font-size: 12px;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .h-left { color: #1d1d1f; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px; }
+  .h-right { color: #86868b; flex-shrink: 0; }
+  .section-divider {
+    display: flex; align-items: center; gap: 10px; margin: 14px 0 10px;
+    font-size: 12px; color: #86868b; font-weight: 500;
+  }
+  .section-divider::before, .section-divider::after {
+    content: ''; flex: 1; height: 1px; background: #e5e5ea;
+  }
+  #collectResult {
+    font-size: 11px; padding: 8px 10px; border-radius: 8px;
+    margin-top: 8px; display: none;
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-icon">P</div>
+    <div>
+      <h3>PDD 工具箱</h3>
+      <p>竞品监控 + 退货分析</p>
+    </div>
+  </div>
+
+  <div class="pill ok" id="status">
+    <span class="dot"></span>
+    <span id="statusText">检查中...</span>
+  </div>
+
+  <div id="tab1Content">
+    <div id="resultArea" style="display:none;">
+      <div class="card">
+        <div class="card-title">商品信息</div>
+        <div class="row"><span class="row-label">标题</span><span class="row-value" id="rTitle">-</span></div>
+        <div class="row"><span class="row-label">价格</span><span class="row-value red" id="rPrice">-</span></div>
+        <div class="row"><span class="row-label">销量</span><span class="row-value" id="rSales">-</span></div>
+        <div class="row"><span class="row-label">店铺</span><span class="row-value" id="rShop">-</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">优惠券</div>
+        <div id="rCoupons" class="tags"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">营销活动</div>
+        <div id="rActivities" class="tags"></div>
+      </div>
+    </div>
+
+    <div class="section-divider">退货数据采集</div>
+
+    <div class="tip">
+      <b>操作步骤：</b><br>
+      1. 打开商家后台 → 售后管理 → 售后工作台<br>
+      2. 筛选商品ID和时间范围<br>
+      3. 点击下方「采集当前页面」
+    </div>
+
+    <div class="btn-group" style="margin-top:10px;">
+      <button class="btn btn-purple" id="collectBtn">采集售后订单</button>
+      <button class="btn btn-green" id="saveBtn">保存到系统</button>
+    </div>
+    <div id="collectResult"></div>
+
+    <div class="section-divider">聊天记录采集</div>
+    <div class="tip">
+      采集消费者与客服的聊天记录，分析退货反馈<br>
+      <b>推荐方式：手动粘贴</b><br>
+      1. 在商家后台「客服→聊天记录」页面<br>
+      2. 复制聊天内容<br>
+      3. 粘贴到退货分析页面的文本框<br>
+      <b>或点击下方按钮尝试自动采集</b>（商家后台有安全限制，可能失败）
+    </div>
+    <div class="btn-group" style="margin-top:10px;">
+      <button class="btn btn-purple" id="chatCollectBtn">采集聊天记录</button>
+      <button class="btn btn-green" id="chatSaveBtn">保存聊天记录</button>
+    </div>
+    <div id="chatCollectResult"></div>
+
+    <div class="btn-group" style="margin-top:10px;">
+      <a href="http://127.0.0.1:8765/return_analysis" target="_blank" style="text-decoration:none;flex:1;">
+        <button class="btn btn-primary" style="width:100%;">打开退货分析</button>
+      </a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

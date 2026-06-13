@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>退货原因分析</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: #f5f5f7; color: #1d1d1f; min-height: 100vh;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 30px 20px; }
+  .header {
+    text-align: center; margin-bottom: 30px;
+  }
+  .header h1 {
+    font-size: 28px; font-weight: 700; color: #1d1d1f; margin-bottom: 6px;
+  }
+  .header p { font-size: 14px; color: #86868b; }
+
+  .card {
+    background: #fff; border-radius: 16px; padding: 24px;
+    margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .card-title {
+    font-size: 16px; font-weight: 600; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .icon-red { background: #fee; color: #e74c3c; }
+  .icon-blue { background: #e3f2fd; color: #1565c0; }
+  .icon-green { background: #e8f5e9; color: #2e7d32; }
+  .icon-orange { background: #fff8e1; color: #f57f17; }
+
+  .form-row {
+    display: flex; gap: 12px; margin-bottom: 12px; align-items: center;
+  }
+  .form-row label {
+    font-size: 13px; color: #86868b; min-width: 80px; flex-shrink: 0;
+  }
+  .form-row input, .form-row select {
+    flex: 1; padding: 10px 14px; border: 1px solid #e5e5ea; border-radius: 10px;
+    font-size: 14px; outline: none; transition: border-color 0.2s;
+    font-family: inherit;
+  }
+  .form-row input:focus, .form-row select:focus { border-color: #e74c3c; }
+
+  .btn {
+    padding: 10px 24px; border: none; border-radius: 10px;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: all 0.2s; font-family: inherit;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: #e74c3c; color: white; }
+  .btn-primary:hover { background: #d63031; }
+  .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+  .btn-secondary { background: #e5e5ea; color: #1d1d1f; }
+
+  .step-list { list-style: none; }
+  .step-item {
+    display: flex; gap: 14px; padding: 14px 0;
+    border-bottom: 1px solid #f2f2f7;
+  }
+  .step-item:last-child { border-bottom: none; }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #f2f2f7; color: #86868b;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; flex-shrink: 0;
+  }
+  .step-num.active { background: #e74c3c; color: white; }
+  .step-num.done { background: #2e7d32; color: white; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 14px; font-weight: 500; }
+  .step-desc { font-size: 12px; color: #86868b; margin-top: 2px; }
+  .step-status {
+    font-size: 12px; margin-top: 6px; padding: 4px 10px;
+    border-radius: 8px; display: inline-block;
+  }
+  .status-running { background: #fff8e1; color: #f57f17; }
+  .status-done { background: #e8f5e9; color: #2e7d32; }
+  .status-error { background: #fee; color: #e74c3c; }
+
+  .result-section { display: none; }
+  .result-section.show { display: block; }
+
+  .stat-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: #f8f9fa; border-radius: 12px; padding: 14px; text-align: center;
+  }
+  .stat-num { font-size: 24px; font-weight: 700; color: #e74c3c; }
+  .stat-label { font-size: 12px; color: #86868b; margin-top: 4px; }
+
+  .reason-list { list-style: none; }
+  .reason-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid #f2f2f7;
+  }
+  .reason-item:last-child { border-bottom: none; }
+  .reason-bar {
+    flex: 1; height: 8px; background: #f2f2f7; border-radius: 4px; overflow: hidden;
+  }
+  .reason-bar-fill {
+    height: 100%; border-radius: 4px; background: linear-gradient(90deg, #e74c3c, #ff6b6b);
+    transition: width 0.6s ease;
+  }
+  .reason-name { font-size: 14px; min-width: 120px; }
+  .reason-count { font-size: 13px; color: #86868b; min-width: 60px; text-align: right; }
+  .reason-pct { font-size: 13px; color: #e74c3c; font-weight: 600; min-width: 50px; text-align: right; }
+
+  .chat-list { max-height: 400px; overflow-y: auto; }
+  .chat-item {
+    padding: 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 8px;
+  }
+  .chat-header {
+    display: flex; justify-content: space-between; margin-bottom: 6px;
+  }
+  .chat-buyer { font-size: 13px; font-weight: 500; }
+  .chat-time { font-size: 11px; color: #86868b; }
+  .chat-msg { font-size: 13px; color: #555; line-height: 1.5; }
+  .chat-tag {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    font-size: 11px; margin-top: 6px;
+  }
+  .chat-tag.quality { background: #fee; color: #e74c3c; }
+  .chat-tag.logistics { background: #fff8e1; color: #f57f17; }
+  .chat-tag.size { background: #e3f2fd; color: #1565c0; }
+  .chat-tag.other { background: #f2f2f7; color: #86868b; }
+
+  .export-btn {
+    margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end;
+  }
+
+  .progress-bar {
+    width: 100%; height: 6px; background: #f2f2f7; border-radius: 3px;
+    overflow: hidden; margin-top: 10px;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 4px; background: linear-gradient(90deg, #e74c3c, #ff6b6b);
+    transition: width 0.3s;
+    width: 0%;
+  }
+  .upload-zone {
+    border: 2px dashed #d1d1d6; border-radius: 12px; padding: 30px;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+    background: #fafafa;
+  }
+  .upload-zone:hover { border-color: #6c5ce7; background: #f5f3ff; }
+  .upload-zone.dragover { border-color: #6c5ce7; background: #ede9fe; }
+  .upload-icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-text { font-size: 14px; color: #1d1d1f; font-weight: 500; }
+  .upload-hint { font-size: 12px; color: #86868b; margin-top: 4px; }
+  .upload-result {
+    margin-top: 12px; padding: 10px 14px; border-radius: 10px;
+    font-size: 13px; display: none;
+  }
+  .upload-result.show { display: block; }
+  .upload-result.success { background: #e8f5e9; color: #2e7d32; }
+  .upload-result.error { background: #fee; color: #e74c3c; }
+  .csv-preview {
+    max-height: 200px; overflow-y: auto; margin-top: 12px;
+    font-size: 12px; background: #f8f9fa; border-radius: 8px; padding: 10px;
+  }
+  .csv-preview table { width: 100%; border-collapse: collapse; }
+  .csv-preview th, .csv-preview td { padding: 4px 8px; border-bottom: 1px solid #e5e5ea; text-align: left; }
+  .csv-preview th { background: #f2f2f7; font-weight: 600; position: sticky; top: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>退货原因分析</h1>
+    <p>自动分析退货订单，整理买家反馈，找出退货根本原因</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <span class="icon icon-blue" style="background:#ede9fe;color:#6c5ce7;">CSV</span>
+      导入退货数据
+    </div>
+    <p style="font-size:12px;color:#86868b;margin-bottom:12px;">
+      在商家后台「售后管理 → 售后工作台」点击「批量导出」下载文件，然后点击下方选择或拖入
+    </p>
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">📄</div>
+      <div class="upload-text">点击选择文件，或拖拽 XLSX/CSV 文件到这里</div>
+      <div class="upload-hint">支持拼多多售后工作台导出的 XLSX 和 CSV 格式</div>
+      <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" style="display:none;">
+    </div>
+    <div class="upload-result" id="uploadResult"></div>
+    <div class="csv-preview" id="csvPreview" style="display:none;"></div>
+    <div style="margin-top:12px;text-align:right;">
+      <button class="btn btn-primary" id="csvAnalysisBtn" onclick="startCsvAnalysis()" style="background:#6c5ce7;display:none;">分析导入数据</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">
+      <span class="icon icon-orange">💬</span>
+      导入聊天记录
+    </div>
+    <p style="font-size:12px;color:#86868b;margin-bottom:12px;">
+      从商家后台客服平台导出聊天记录，或手动粘贴消费者反馈文本<br>
+      <b>提示：</b>即使没有聊天记录，系统也会从退货订单的客服备注中自动提取反馈信息
+    </p>
+    <div class="upload-zone" id="chatUploadZone">
+      <div class="upload-icon">💬</div>
+      <div class="upload-text">拖拽聊天记录文件到这里，或点击选择</div>
+      <div class="upload-hint">支持 XLSX / CSV 格式，或直接粘贴文本</div>
+      <input type="file" id="chatFileInput" accept=".csv,.xlsx,.xls,.txt" style="display:none;">
+    </div>
+    <div class="upload-result" id="chatUploadResult"></div>
+    <div class="csv-preview" id="chatPreview" style="display:none;"></div>
+    <div style="margin-top:12px;">
+      <label style="font-size:12px;color:#86868b;display:block;margin-bottom:6px;"><b>推荐方式：</b>复制聊天记录后粘贴到下方：</label>
+      <textarea id="chatTextInput" style="width:100%;height:140px;border:1px solid #e5e5ea;border-radius:10px;padding:10px;font-size:13px;font-family:inherit;resize:vertical;" placeholder="操作步骤：&#10;1. 在商家后台「客服→聊天记录」页面&#10;2. 鼠标拖选聊天内容，Ctrl+C 复制&#10;3. 粘贴到这里，点击「解析文本」&#10;&#10;示例：&#10;买家：这个裙子尺码偏小&#10;客服：亲，建议参考尺码表选购&#10;买家：质量不好，有线头"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-primary" onclick="parseChatText()" style="background:#6c5ce7;">解析文本</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('chatTextInput').value='';chatData=[];document.getElementById('chatPreview').style.display='none';document.getElementById('chatAnalysisBtn').style.display='none';showChatResult('已清空','success');">清空</button>
+      </div>
+    </div>
+    <div style="margin-top:12px;text-align:right;">
+      <button class="btn btn-primary" id="chatAnalysisBtn" onclick="analyzeChats()" style="background:#e67e22;display:none;">分析聊天反馈</button>
+    </div>
+  </div>
+
+  <div class="card" id="processCard" style="display:none;">
+    <div class="card-title">
+      <span class="icon icon-blue">2</span>
+      分析进度
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <ol class="step-list" id="stepList">
+      <li class="step-item">
+        <span class="step-num" id="step1">1</span>
+        <div class="step-content">
+          <div class="step-title">获取退货订单</div>
+          <div class="step-desc">从商家后台抓取指定时间内的退货订单</div>
+          <div class="step-status" id="step1Status" style="display:none;"></div>
+        </div>
+      </li>
+      <li class="step-item">
+        <span class="step-num" id="step2">2</span>
+        <div class="step-content">
+          <div class="step-title">收集聊天记录</div>
+          <div class="step-desc">搜集退货买家的聊天反馈记录</div>
+          <div class="step-status" id="step2Status" style="display:none;"></div>
+        </div>
+      </li>
+      <li class="step-item">
+        <span class="step-num" id="step3">3</span>
+        <div class="step-content">
+          <div class="step-title">分析退货原因</div>
+          <div class="step-desc">AI分析聊天记录，分类整理退货原因</div>
+          <div class="step-status" id="step3Status" style="display:none;"></div>
+        </div>
+      </li>
+      <li class="step-item">
+        <span class="step-num" id="step4">4</span>
+        <div class="step-content">
+          <div class="step-title">生成报告</div>
+          <div class="step-desc">输出退货原因分析报告和改进建议</div>
+          <div class="step-status" id="step4Status" style="display:none;"></div>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <div class="card result-section" id="resultSection">
+    <div class="card-title">
+      <span class="icon icon-green">3</span>
+      分析结果
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-num" id="totalOrders">0</div>
+        <div class="stat-label">退货订单</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="totalAmount">¥0</div>
+        <div class="stat-label">退货金额</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="returnRate">¥0</div>
+        <div class="stat-label">平均退货金额</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="chatCount">0</div>
+        <div class="stat-label">聊天记录</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <h3 style="font-size: 15px; margin-bottom: 12px;">退货原因分布</h3>
+      <ul class="reason-list" id="reasonList"></ul>
+    </div>
+  </div>
+
+  <div class="card result-section" id="chatSection">
+    <div class="card-title">
+      <span class="icon icon-orange">4</span>
+      买家反馈记录
+    </div>
+    <div class="chat-list" id="chatList"></div>
+  </div>
+
+  <div class="card result-section" id="suggestionSection">
+    <div class="card-title">
+      <span class="icon icon-blue">5</span>
+      改进建议
+    </div>
+    <div id="suggestionList"></div>
+  </div>
+
+  <div class="export-btn result-section" id="exportSection">
+    <button class="btn btn-secondary" onclick="exportCSV()">导出CSV</button>
+    <button class="btn btn-primary" onclick="exportReport()">导出报告</button>
+  </div>
+</div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script>
+const API = 'http://127.0.0.1:8765';
+let analysisData = {};
+let csvOrders = [];
+
+const uploadZone = document.getElementById('uploadZone');
+const csvFileInput = document.getElementById('csvFile');
+
+uploadZone.onclick = () => csvFileInput.click();
+
+uploadZone.ondragover = function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  uploadZone.classList.add('dragover');
+};
+uploadZone.ondragleave = function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  uploadZone.classList.remove('dragover');
+};
+uploadZone.ondrop = function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  uploadZone.classList.remove('dragover');
+  var files = e.dataTransfer.files;
+  if (files.length > 0) handleFile(files[0]);
+};
+
+csvFileInput.onchange = function(e) {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+};
+
+function handleFile(file) {
+  var name = file.name.toLowerCase();
+  if (name.endsWith('.csv')) {
+    handleCsvFile(file);
+  } else if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    handleXlsxFile(file);
+  } else {
+    showUploadResult('请上传 CSV 或 XLSX 格式文件', 'error');
+  }
+}
+
+function handleXlsxFile(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = new Uint8Array(e.target.result);
+      var workbook = XLSX.read(data, { type: 'array' });
+      var sheetName = workbook.SheetNames[0];
+      var sheet = workbook.Sheets[sheetName];
+      var jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      if (jsonData.length === 0) {
+        showUploadResult('XLSX文件为空', 'error');
+        return;
+      }
+
+      csvOrders = jsonData.map(function(row) {
+        return {
+          order_no: row['订单号'] || row['订单编号'] || row['售后单号'] || row['售后编号'] || row['订单号(1)'] || '',
+          amount: String(row['实收金额'] || row['退款金额'] || row['交易金额'] || row['金额'] || row['实收'] || ''),
+          reason: row['退款原因'] || row['售后原因'] || row['退货原因'] || row['原因'] || '未填写',
+          time: row['申请时间'] || row['成交时间'] || row['时间'] || '',
+          status: row['售后状态'] || row['订单状态'] || row['状态'] || row['售后类型'] || row['退款类型'] || '',
+          buyer: row['买家'] || row['买家昵称'] || '',
+          goods_name: row['商品信息'] || row['商品名称'] || row['商品'] || '',
+          raw: row
+        };
+      }).filter(function(o) { return o.order_no || o.reason !== '未填写'; });
+
+      if (csvOrders.length === 0) {
+        showUploadResult('未解析到有效订单数据', 'error');
+        return;
+      }
+
+      showUploadResult('成功解析 ' + csvOrders.length + ' 条退货订单 (来源: ' + sheetName + ')', 'success');
+      showPreview();
+      saveToServer();
+
+    } catch (err) {
+      showUploadResult('解析XLSX失败: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleCsvFile(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var text = e.target.result;
+    var lines = text.split('\n').filter(function(l) { return l.trim(); });
+    if (lines.length < 2) {
+      showUploadResult('CSV文件为空或格式不正确', 'error');
+      return;
+    }
+
+    var headers = parseCSVLine(lines[0]);
+    csvOrders = [];
+
+    for (var i = 1; i < lines.length; i++) {
+      var values = parseCSVLine(lines[i]);
+      if (values.length < 3) continue;
+
+      var order = {};
+      headers.forEach(function(h, j) { order[h.trim()] = (values[j] || '').trim(); });
+
+      csvOrders.push({
+        order_no: order['订单号'] || order['订单编号'] || order['售后单号'] || order['售后编号'] || '',
+        amount: order['实收金额'] || order['退款金额'] || order['交易金额'] || order['金额'] || order['实收'] || '',
+        reason: order['退款原因'] || order['售后原因'] || order['退货原因'] || order['原因'] || '未填写',
+        time: order['申请时间'] || order['成交时间'] || order['时间'] || '',
+        status: order['售后状态'] || order['订单状态'] || order['状态'] || order['退款类型'] || '',
+        buyer: order['买家'] || '',
+        goods_name: order['商品信息'] || order['商品名称'] || '',
+        raw: order
+      });
+    }
+
+    csvOrders = csvOrders.filter(function(o) { return o.order_no || o.reason !== '未填写'; });
+
+    if (csvOrders.length === 0) {
+      showUploadResult('未解析到有效订单数据', 'error');
+      return;
+    }
+
+    showUploadResult('成功解析 ' + csvOrders.length + ' 条退货订单', 'success');
+    showPreview();
+    saveToServer();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSVLine(line) {
+  var result = [];
+  var current = '';
+  var inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; }
+    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current);
+  return result;
+}
+
+function showPreview() {
+  var preview = '<table><tr>';
+  ['订单号', '售后原因', '金额', '申请时间', '状态'].forEach(function(h) { preview += '<th>' + h + '</th>'; });
+  preview += '</tr>';
+  csvOrders.slice(0, 10).forEach(function(o) {
+    preview += '<tr>';
+    preview += '<td>' + (o.order_no || '').slice(0, 18) + '</td>';
+    preview += '<td>' + (o.reason || '') + '</td>';
+    preview += '<td>' + (o.amount || '') + '</td>';
+    preview += '<td>' + (o.time || '') + '</td>';
+    preview += '<td>' + (o.status || '') + '</td>';
+    preview += '</tr>';
+  });
+  preview += '</table>';
+  if (csvOrders.length > 10) preview += '<div style="text-align:center;color:#86868b;padding:4px;">共 ' + csvOrders.length + ' 条</div>';
+
+  document.getElementById('csvPreview').innerHTML = preview;
+  document.getElementById('csvPreview').style.display = 'block';
+  document.getElementById('csvAnalysisBtn').style.display = 'inline-block';
+}
+
+function saveToServer() {
+  fetch(API + '/api/return/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orders: csvOrders, chats: [], export_time: new Date().toISOString(), source: 'file_import' })
+  });
+}
+
+function showUploadResult(msg, type) {
+  var el = document.getElementById('uploadResult');
+  el.className = 'upload-result show ' + type;
+  el.textContent = msg;
+}
+
+let chatData = [];
+
+const chatUploadZone = document.getElementById('chatUploadZone');
+const chatFileInput = document.getElementById('chatFileInput');
+
+chatUploadZone.onclick = () => chatFileInput.click();
+chatUploadZone.ondragover = function(e) { e.preventDefault(); e.stopPropagation(); chatUploadZone.classList.add('dragover'); };
+chatUploadZone.ondragleave = function(e) { e.preventDefault(); e.stopPropagation(); chatUploadZone.classList.remove('dragover'); };
+chatUploadZone.ondrop = function(e) { e.preventDefault(); e.stopPropagation(); chatUploadZone.classList.remove('dragover'); if (e.dataTransfer.files.length > 0) handleChatFile(e.dataTransfer.files[0]); };
+chatFileInput.onchange = function(e) { if (e.target.files.length > 0) handleChatFile(e.target.files[0]); };
+
+function handleChatFile(file) {
+  var name = file.name.toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = new Uint8Array(e.target.result);
+        var workbook = XLSX.read(data, { type: 'array' });
+        var sheet = workbook.Sheets[workbook.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        chatData = rows.map(r => ({
+          message: r['聊天内容'] || r['消息内容'] || r['内容'] || r['消息'] || Object.values(r).join(' '),
+          buyer: r['买家'] || r['消费者'] || r['用户'] || '',
+          time: r['时间'] || r['发送时间'] || r['消息时间'] || '',
+          category: classifyChat(r['聊天内容'] || r['消息内容'] || r['内容'] || r['消息'] || Object.values(r).join(' '))
+        })).filter(c => c.message.length > 5);
+        showChatResult('解析到 ' + chatData.length + ' 条聊天记录', 'success');
+        showChatPreview();
+      } catch(err) { showChatResult('解析失败: ' + err.message, 'error'); }
+    };
+    reader.readAsArrayBuffer(file);
+  } else if (name.endsWith('.csv')) {
+    var reader2 = new FileReader();
+    reader2.onload = function(e) {
+      var lines = e.target.result.split('\n').filter(l => l.trim());
+      if (lines.length < 2) { showChatResult('CSV为空', 'error'); return; }
+      var headers = parseCSVLine(lines[0]);
+      chatData = [];
+      for (var i = 1; i < lines.length; i++) {
+        var values = parseCSVLine(lines[i]);
+        var obj = {};
+        headers.forEach((h, j) => obj[h.trim()] = (values[j] || '').trim());
+        var msg = obj['聊天内容'] || obj['消息内容'] || obj['内容'] || obj['消息'] || '';
+        if (msg.length > 5) chatData.push({ message: msg, buyer: obj['买家'] || '', time: obj['时间'] || '', category: classifyChat(msg) });
+      }
+      showChatResult('解析到 ' + chatData.length + ' 条聊天记录', 'success');
+      showChatPreview();
+    };
+    reader2.readAsText(file, 'UTF-8');
+  } else if (name.endsWith('.txt')) {
+    var reader3 = new FileReader();
+    reader3.onload = function(e) { parseChatTextContent(e.target.result); };
+    reader3.readAsText(file, 'UTF-8');
+  }
+}
+
+function parseChatText() {
+  var text = document.getElementById('chatTextInput').value;
+  parseChatTextContent(text);
+}
+
+function parseChatTextContent(text) {
+  chatData = [];
+  var lines = text.split(/\n/).filter(l => l.trim().length > 5);
+  lines.forEach(line => {
+    var msg = line.trim();
+    if (msg.length > 5 && msg.length < 500) {
+      chatData.push({ message: msg, buyer: '消费者', time: '', category: classifyChat(msg) });
+    }
+  });
+  if (chatData.length > 0) {
+    showChatResult('解析到 ' + chatData.length + ' 条反馈记录', 'success');
+    showChatPreview();
+  } else {
+    showChatResult('未解析到有效内容', 'error');
+  }
+}
+
+function classifyChat(text) {
+  if (text.match(/质量|坏了|破损|瑕疵|做工|面料|材质|味道|异味|线头|脱线|开裂/)) return '质量问题';
+  if (text.match(/偏大|偏小|尺码|大小|不合适|尺寸|码数|紧了|松了/)) return '尺寸问题';
+  if (text.match(/物流|快递|发货|到货|配送|运损|包装/)) return '物流问题';
+  if (text.match(/颜色|色差|图片|描述|不一样|不符|款式/)) return '与描述不符';
+  if (text.match(/不喜欢|不想要|不需要|买错|多拍了/)) return '不想要';
+  return '其他';
+}
+
+function showChatResult(msg, type) {
+  var el = document.getElementById('chatUploadResult');
+  el.className = 'upload-result show ' + type;
+  el.textContent = msg;
+}
+
+function showChatPreview() {
+  var preview = '<table><tr><th>内容</th><th>分类</th></tr>';
+  chatData.slice(0, 10).forEach(c => {
+    preview += '<tr><td>' + c.message.slice(0, 60) + '</td><td>' + c.category + '</td></tr>';
+  });
+  preview += '</table>';
+  if (chatData.length > 10) preview += '<div style="text-align:center;color:#86868b;">共 ' + chatData.length + ' 条</div>';
+  document.getElementById('chatPreview').innerHTML = preview;
+  document.getElementById('chatPreview').style.display = 'block';
+  document.getElementById('chatAnalysisBtn').style.display = 'inline-block';
+}
+
+function analyzeChats() {
+  if (chatData.length === 0) { alert('请先导入聊天记录'); return; }
+
+  var categoryCounts = {};
+  chatData.forEach(c => { categoryCounts[c.category] = (categoryCounts[c.category] || 0) + 1; });
+  var reasons = Object.entries(categoryCounts).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
+
+  var suggestions = [];
+  reasons.forEach(r => {
+    var pct = Math.round(r.count / chatData.length * 100);
+    if (r.reason === '质量问题') suggestions.push({ title: '提升商品质量', detail: '质量问题反馈' + pct + '%，建议加强品控，抽检出库商品' });
+    else if (r.reason === '尺寸问题') suggestions.push({ title: '优化尺码说明', detail: '尺寸问题反馈' + pct + '%，建议完善尺码对照表，增加试穿参考' });
+    else if (r.reason === '物流问题') suggestions.push({ title: '改善物流体验', detail: '物流问题反馈' + pct + '%，建议优化包装，更换物流商' });
+    else if (r.reason === '与描述不符') suggestions.push({ title: '完善商品描述', detail: '描述不符反馈' + pct + '%，建议使用实拍图片，如实描述商品' });
+    else if (r.reason === '不想要') suggestions.push({ title: '优化详情页', detail: '不想要反馈' + pct + '%，建议更准确展示商品，减少冲动消费' });
+    else suggestions.push({ title: '关注' + r.reason, detail: r.reason + '反馈' + pct + '%，建议深入分析' });
+  });
+
+  if (suggestions.length === 0) suggestions.push({ title: '数据充足', detail: '建议定期分析聊天反馈，持续优化' });
+
+  var data = {
+    goods_id: '聊天记录分析',
+    date_range: '',
+    total_orders: 0,
+    total_amount: 0,
+    return_rate: 0,
+    orders: [],
+    chats: chatData,
+    reasons: reasons,
+    suggestions: suggestions
+  };
+
+  analysisData = data;
+  showResults(data);
+}
+
+async function startCsvAnalysis() {
+  if (csvOrders.length === 0) {
+    alert('请先导入CSV数据');
+    return;
+  }
+
+  document.getElementById('processCard').style.display = 'block';
+  setStep(1, 'done', '从CSV导入 ' + csvOrders.length + ' 笔订单');
+  setProgress(25);
+  setStep(2, 'active', '分析退货原因...');
+  setProgress(50);
+
+  const reasonCounts = {};
+  csvOrders.forEach(o => {
+    const reason = o.reason || '未填写';
+    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+  });
+  const reasons = Object.entries(reasonCounts)
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
+
+  setStep(2, 'done', '分析完成');
+  setProgress(75);
+  setStep(3, 'active', '生成报告...');
+  setProgress(90);
+
+  const totalAmount = csvOrders.reduce((sum, o) => {
+    const num = parseFloat(o.amount) || 0;
+    return sum + num;
+  }, 0);
+
+  const reasonCounts2 = {};
+  csvOrders.forEach(o => {
+    const r = o.reason || '未填写';
+    if (r !== '未填写') reasonCounts2[r] = (reasonCounts2[r] || 0) + 1;
+  });
+  const totalWithReason = Object.values(reasonCounts2).reduce((a, b) => a + b, 0);
+
+  const suggestions = [];
+  reasons.slice(0, 3).forEach(r => {
+    const pct = totalWithReason > 0 ? Math.round(r.count / totalWithReason * 100) : 0;
+    if (r.reason.includes('质量') || r.reason.includes('破损')) {
+      suggestions.push({ title: '提升商品质量', detail: r.reason + '占比' + pct + '%，建议加强品控检查' });
+    } else if (r.reason.includes('尺码') || r.reason.includes('大小') || r.reason.includes('尺寸')) {
+      suggestions.push({ title: '优化尺码说明', detail: r.reason + '占比' + pct + '%，建议完善尺码表' });
+    } else if (r.reason.includes('物流') || r.reason.includes('快递')) {
+      suggestions.push({ title: '改善物流体验', detail: r.reason + '占比' + pct + '%，建议更换物流商' });
+    } else if (r.reason.includes('描述') || r.reason.includes('不符') || r.reason.includes('图片')) {
+      suggestions.push({ title: '完善商品描述', detail: r.reason + '占比' + pct + '%，建议实拍图片' });
+    } else if (r.reason.includes('不想要') || r.reason.includes('不喜欢')) {
+      suggestions.push({ title: '优化商品详情页', detail: r.reason + '占比' + pct + '%，建议更准确展示商品' });
+    } else {
+      suggestions.push({ title: '关注' + r.reason, detail: r.reason + '占比' + pct + '%，建议深入分析原因' });
+    }
+  });
+
+  if (suggestions.length === 0) {
+    suggestions.push({ title: '数据充足', detail: '建议定期分析退货趋势，持续优化商品和服务' });
+  }
+
+  const data = {
+    goods_id: 'CSV导入',
+    date_range: '导入数据',
+    total_orders: csvOrders.length,
+    total_amount: Math.round(totalAmount * 100) / 100,
+    return_rate: csvOrders.length > 0 ? Math.round(totalAmount / csvOrders.length * 10) / 10 : 0,
+    orders: csvOrders,
+    chats: [],
+    reasons: reasons,
+    suggestions: suggestions
+  };
+
+  setStep(3, 'done', '报告已生成');
+  setProgress(100);
+
+  analysisData = data;
+  showResults(data);
+}
+
+function setStep(num, status, text) {
+  const numEl = document.getElementById('step' + num);
+  const statusEl = document.getElementById('step' + num + 'Status');
+  numEl.className = 'step-num ' + status;
+  statusEl.style.display = 'inline-block';
+  statusEl.className = 'step-status status-' + status;
+  statusEl.textContent = text;
+}
+
+function setProgress(pct) {
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function showResults(data) {
+  document.getElementById('resultSection').classList.add('show');
+  document.getElementById('chatSection').classList.add('show');
+  document.getElementById('suggestionSection').classList.add('show');
+  document.getElementById('exportSection').classList.add('show');
+
+  document.getElementById('totalOrders').textContent = data.total_orders || 0;
+  document.getElementById('totalAmount').textContent = '¥' + (data.total_amount || 0);
+  document.getElementById('returnRate').textContent = data.return_rate || 0;
+  document.getElementById('chatCount').textContent = data.chats?.length || 0;
+
+  const reasons = data.reasons || [];
+  const reasonList = document.getElementById('reasonList');
+  const maxCount = Math.max(...reasons.map(r => r.count), 1);
+  reasonList.innerHTML = reasons.map(r => {
+    const pct = data.total_orders > 0 ? Math.round(r.count / data.total_orders * 100) : 0;
+    const barWidth = Math.round(r.count / maxCount * 100);
+    return '<li class="reason-item">' +
+      '<span class="reason-name">' + r.reason + '</span>' +
+      '<div class="reason-bar"><div class="reason-bar-fill" style="width:' + barWidth + '%"></div></div>' +
+      '<span class="reason-count">' + r.count + '笔</span>' +
+      '<span class="reason-pct">' + pct + '%</span>' +
+      '</li>';
+  }).join('');
+
+  const chats = data.chats || [];
+  const chatList = document.getElementById('chatList');
+  chatList.innerHTML = chats.map(c => {
+    const tagClass = c.category === '质量问题' ? 'quality' :
+                     c.category === '物流问题' ? 'logistics' :
+                     c.category === '尺寸问题' ? 'size' : 'other';
+    return '<div class="chat-item">' +
+      '<div class="chat-header">' +
+      '<span class="chat-buyer">' + (c.buyer || '买家') + '</span>' +
+      '<span class="chat-time">' + (c.time || '') + '</span>' +
+      '</div>' +
+      '<div class="chat-msg">' + (c.message || '') + '</div>' +
+      '<span class="chat-tag ' + tagClass + '">' + (c.category || '其他') + '</span>' +
+      '</div>';
+  }).join('') || '<div style="color:#86868b;text-align:center;padding:20px;">暂无聊天记录</div>';
+
+  const suggestions = data.suggestions || [];
+  const suggestionList = document.getElementById('suggestionList');
+  suggestionList.innerHTML = suggestions.map((s, i) => {
+    return '<div style="padding:12px;background:#f8f9fa;border-radius:10px;margin-bottom:8px;">' +
+      '<div style="font-size:14px;font-weight:500;margin-bottom:4px;">' + (i+1) + '. ' + (s.title || '') + '</div>' +
+      '<div style="font-size:13px;color:#666;line-height:1.5;">' + (s.detail || '') + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function exportCSV() {
+  const rows = [['退货原因', '数量', '占比']];
+  (analysisData.reasons || []).forEach(r => {
+    const pct = analysisData.total_orders > 0 ? Math.round(r.count / analysisData.total_orders * 100) + '%' : '0%';
+    rows.push([r.reason, r.count, pct]);
+  });
+
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = '退货分析_' + new Date().toISOString().split('T')[0] + '.csv';
+  link.click();
+}
+
+function exportReport() {
+  let report = '# 退货原因分析报告\n\n';
+  report += '分析时间: ' + new Date().toLocaleString() + '\n';
+  report += '商品ID: ' + (analysisData.goods_id || '') + '\n';
+  report += '分析时段: ' + (analysisData.date_range || '') + '\n\n';
+  report += '## 概况\n';
+  report += '- 退货订单: ' + (analysisData.total_orders || 0) + ' 笔\n';
+  report += '- 退货金额: ¥' + (analysisData.total_amount || 0) + '\n';
+  report += '- 退货率: ' + (analysisData.return_rate || '0') + '%\n\n';
+  report += '## 退货原因分布\n\n';
+  (analysisData.reasons || []).forEach(r => {
+    const pct = analysisData.total_orders > 0 ? Math.round(r.count / analysisData.total_orders * 100) : 0;
+    report += '- ' + r.reason + ': ' + r.count + '笔 (' + pct + '%)\n';
+  });
+  report += '\n## 改进建议\n\n';
+  (analysisData.suggestions || []).forEach((s, i) => {
+    report += (i+1) + '. ' + s.title + '\n   ' + s.detail + '\n\n';
+  });
+
+  const blob = new Blob([report], { type: 'text/markdown;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = '退货分析报告_' + new Date().toISOString().split('T')[0] + '.md';
+  link.click();
+}
+</script>
+</body>
+</html>

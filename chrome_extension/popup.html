@@ -63,6 +63,7 @@
   .btn-secondary { background: #e5e5ea; color: #1d1d1f; }
   .btn-purple { background: #6c5ce7; color: white; }
   .btn-green { background: #27ae60; color: white; }
+  .btn-blue { background: #2980b9; color: white; }
   .tip {
     font-size: 11px; color: #86868b; line-height: 1.5;
     padding: 10px; background: #fff; border-radius: 10px;
@@ -87,6 +88,39 @@
     font-size: 11px; padding: 8px 10px; border-radius: 8px;
     margin-top: 8px; display: none;
   }
+  .tab-nav {
+    display: flex; gap: 8px; margin-bottom: 12px;
+  }
+  .tab-btn {
+    flex: 1; padding: 8px; border: none; border-radius: 10px;
+    font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
+    background: #e5e5ea; color: #1d1d1f; transition: all 0.2s;
+  }
+  .tab-btn.active { background: #6c5ce7; color: white; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .goods-list {
+    max-height: 150px; overflow-y: auto; margin-top: 10px;
+    border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px;
+    background: #fff;
+  }
+  .goods-item {
+    padding: 6px 8px; border-bottom: 1px solid #f0f0f0;
+    font-size: 12px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .goods-item:last-child { border-bottom: none; }
+  .goods-name {
+    color: #333; flex: 1; margin-right: 8px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .goods-price { color: #e74c3c; font-weight: 600; white-space: nowrap; }
+  .progress {
+    height: 4px; background: #e0e0e0; border-radius: 2px; margin: 8px 0;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%; background: #6c5ce7; width: 0%; transition: width 0.3s;
+  }
 </style>
 </head>
 <body>
@@ -94,7 +128,7 @@
     <div class="header-icon">P</div>
     <div>
       <h3>PDD 工具箱</h3>
-      <p>竞品监控 + 退货分析</p>
+      <p>竞品监控 + 退货分析 + 商品导出</p>
     </div>
   </div>
 
@@ -103,7 +137,12 @@
     <span id="statusText">检查中...</span>
   </div>
 
-  <div id="tab1Content">
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="tab-return">退货数据</button>
+    <button class="tab-btn" data-tab="tab-goods">商品导出</button>
+  </div>
+
+    <div id="tab-return" class="tab-content active">
     <div id="resultArea" style="display:none;">
       <div class="card">
         <div class="card-title">商品信息</div>
@@ -122,40 +161,60 @@
       </div>
     </div>
 
-    <div class="section-divider">退货数据采集</div>
+    <div class="btn-group" style="margin-top:10px;">
+      <button class="btn btn-primary" id="openAnalysisBtn" style="flex:2;">打开退货分析</button>
+      <button class="btn btn-secondary" id="startAgentBtn" style="flex:1;">启动Agent</button>
+    </div>
+    <div id="agentTip" style="display:none;margin-top:8px;" class="tip">
+      <b>Agent未运行</b><br>
+      1. 下载并运行 <a href="https://github.com/5286pnt2jz-png/PDD-Toolbox-Website/releases/download/v1.0.1/PDD-Chrome.zip" target="_blank">PDD-Chrome.zip</a><br>
+      2. 或点击左侧「启动Agent」自动检测并启动<br>
+      3. 启动后状态会自动更新
+    </div>
+  </div>
 
+  <div id="tab-goods" class="tab-content">
+    <div class="section-divider">店铺商品导出</div>
+    
     <div class="tip">
       <b>操作步骤：</b><br>
-      1. 打开商家后台 → 售后管理 → 售后工作台<br>
-      2. 筛选商品ID和时间范围<br>
-      3. 点击下方「采集当前页面」
+      1. 打开店铺主页，点击「全部商品」标签<br>
+      2. 向下滚动加载更多商品<br>
+      3. 点击下方「采集当前页面商品」<br>
+      4. 点击「导出为CSV文件」
     </div>
 
     <div class="btn-group" style="margin-top:10px;">
-      <button class="btn btn-purple" id="collectBtn">采集售后订单</button>
-      <button class="btn btn-green" id="saveBtn">保存到系统</button>
+      <button class="btn btn-purple" id="goodsCollectBtn">采集当前页面商品</button>
+      <button class="btn btn-blue" id="goodsExportBtn">导出为CSV文件</button>
     </div>
-    <div id="collectResult"></div>
+    <div id="goodsCollectResult"></div>
+    <div class="progress" id="goodsProgress" style="display:none">
+      <div class="progress-bar" id="goodsProgressBar"></div>
+    </div>
+    <div class="goods-list" id="goodsList" style="display:none"></div>
+    <div class="tip" style="margin-top:10px;">
+      <b>提示：</b> 包含商品ID、名称、价格、销量等信息
+    </div>
 
-    <div class="section-divider">聊天记录采集</div>
+    <div class="section-divider" style="margin-top:16px;">商家商品活动价导出</div>
+    
     <div class="tip">
-      采集消费者与客服的聊天记录，分析退货反馈<br>
-      <b>推荐方式：手动粘贴</b><br>
-      1. 在商家后台「客服→聊天记录」页面<br>
-      2. 复制聊天内容<br>
-      3. 粘贴到退货分析页面的文本框<br>
-      <b>或点击下方按钮尝试自动采集</b>（商家后台有安全限制，可能失败）
+      <b>操作步骤：</b><br>
+      1. 打开商家后台 → 商品管理 → 商品列表<br>
+      2. 筛选需要导出的商品<br>
+      3. 点击下方「采集当前页面商品」<br>
+      4. 点击「导出为CSV文件」<br>
+      <b>提示：</b> 包含商品ID、名称、原价、活动价、到手价等信息
     </div>
-    <div class="btn-group" style="margin-top:10px;">
-      <button class="btn btn-purple" id="chatCollectBtn">采集聊天记录</button>
-      <button class="btn btn-green" id="chatSaveBtn">保存聊天记录</button>
-    </div>
-    <div id="chatCollectResult"></div>
 
     <div class="btn-group" style="margin-top:10px;">
-      <a href="http://127.0.0.1:8765/return_analysis" target="_blank" style="text-decoration:none;flex:1;">
-        <button class="btn btn-primary" style="width:100%;">打开退货分析</button>
-      </a>
+      <button class="btn btn-purple" id="merchantGoodsCollectBtn">采集当前页面商品</button>
+      <button class="btn btn-blue" id="merchantGoodsExportBtn">导出为CSV文件</button>
+    </div>
+    <div id="merchantGoodsCollectResult"></div>
+    <div class="progress" id="merchantGoodsProgress" style="display:none">
+      <div class="progress-bar" id="merchantGoodsProgressBar"></div>
     </div>
   </div>
 

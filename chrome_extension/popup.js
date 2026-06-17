@@ -1,16 +1,22 @@
 checkStatus();
 
-let collectedReturnOrders = [];
+let collectedShopGoods = [];
+let collectedMerchantGoods = [];
+
+// Tab切换
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById(this.dataset.tab).classList.add('active');
+  });
+});
 
 async function doCapture() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) return;
-
-    if (tab.url.includes('mms.pinduoduo.com')) {
-      await collectMerchantData(tab);
-      return;
-    }
 
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -53,93 +59,6 @@ async function doCapture() {
   } catch (e) {}
 }
 
-async function collectMerchantData(tab) {
-  const resultEl = document.getElementById('collectResult');
-  resultEl.style.display = 'block';
-  resultEl.style.background = '#e3f2fd';
-  resultEl.style.color = '#1565c0';
-  resultEl.textContent = '正在读取页面数据...';
-
-  try {
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id, allFrames: true },
-      world: 'MAIN',
-      func: () => {
-        const orders = [];
-
-        document.querySelectorAll('table').forEach(table => {
-          const ths = table.querySelectorAll('th');
-          if (ths.length === 0) return;
-          const headers = Array.from(ths).map(h => h.innerText.trim());
-
-          table.querySelectorAll('tbody tr').forEach(tr => {
-            const cells = tr.querySelectorAll('td');
-            if (cells.length < 3) return;
-            const rowText = Array.from(cells).map(c => c.innerText.trim()).join(' | ');
-
-            if (!rowText.match(/退货|退款|售后|退回|仅退款/)) return;
-
-            const orderNo = (rowText.match(/(\d{4,6}-\d{10,})/) || ['', ''])[1];
-            if (!orderNo) return;
-
-            const order = { order_no: orderNo, amount: '', reason: '未填写', time: '', status: '' };
-
-            headers.forEach((h, i) => {
-              if (i >= cells.length) return;
-              const val = cells[i].innerText.trim();
-              if (h.includes('金额') || h.includes('实收')) order.amount = (val.match(/[\d.]+/) || [''])[0];
-              if (h.includes('原因')) order.reason = val || '未填写';
-              if (h.includes('时间')) order.time = val;
-              if (h.includes('状态') || h.includes('类型')) order.status = order.status || val;
-            });
-
-            orders.push(order);
-          });
-        });
-
-        if (orders.length === 0) {
-          const allText = document.body.innerText;
-          const orderMatches = allText.match(/订单号[：:]\s*(\d{4,6}-\d{10,})/g) || [];
-          const reasons = allText.match(/售后原因[：:]\s*([^\s,，|]+)/g) || [];
-          const amounts = allText.match(/实收[：:]\s*¥?([\d.]+)/g) || [];
-
-          for (let i = 0; i < orderMatches.length; i++) {
-            const orderNo = (orderMatches[i].match(/(\d{4,6}-\d{10,})/) || ['', ''])[1];
-            const reason = reasons[i] ? (reasons[i].match(/售后原因[：:]\s*([^\s,，|]+)/) || ['', '未填写'])[1] : '未填写';
-            const amount = amounts[i] ? (amounts[i].match(/([\d.]+)/) || ['', ''])[1] : '';
-            orders.push({ order_no: orderNo, amount: amount, reason: reason, time: '', status: '' });
-          }
-        }
-
-        return orders;
-      }
-    });
-
-    const orders = results[0]?.result || [];
-    collectedReturnOrders = collectedReturnOrders.concat(orders);
-
-    if (orders.length > 0) {
-      resultEl.style.background = '#e8f5e9';
-      resultEl.style.color = '#2e7d32';
-      resultEl.textContent = '采集到 ' + orders.length + ' 条 (总计: ' + collectedReturnOrders.length + ' 条)';
-
-      document.getElementById('returnOrders').style.display = 'block';
-      document.getElementById('returnOrders').innerHTML = orders.slice(0, 10).map(o =>
-        '<div class="history-item"><span class="h-left">' + o.order_no.slice(0, 15) + ' | ' + o.reason + '</span><span class="h-right">¥' + o.amount + '</span></div>'
-      ).join('');
-    } else {
-      resultEl.style.background = '#fff8e1';
-      resultEl.style.color = '#f57f17';
-      resultEl.textContent = '未采集到数据，请先筛选售后订单列表';
-    }
-
-  } catch (e) {
-    resultEl.style.background = '#fee';
-    resultEl.style.color = '#e74c3c';
-    resultEl.textContent = '读取失败: ' + e.message;
-  }
-}
-
 async function autoCapture() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -147,158 +66,375 @@ async function autoCapture() {
   } catch (e) {}
 }
 
-document.getElementById('collectBtn').onclick = doCapture;
-
 let collectedChats = [];
-
-document.getElementById('chatCollectBtn').onclick = async function() {
-  const resultEl = document.getElementById('chatCollectResult');
-  resultEl.style.display = 'block';
-  resultEl.style.background = '#e3f2fd';
-  resultEl.style.color = '#1565c0';
-  resultEl.textContent = '正在读取聊天记录...';
-
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) return;
-
-    const debuggee = { tabId: tab.id };
-
-    await chrome.debugger.attach(debuggee, '1.3');
-    await chrome.debugger.sendCommand(debuggee, 'Runtime.enable');
-
-    const expression = `(() => {
-      // 先找到聊天记录区域
-      const result = { structure: '', chatTexts: [], allTextSample: '' };
-
-      // 获取页面所有元素的类名，用于调试
-      const classNames = new Set();
-      document.querySelectorAll('*').forEach(el => {
-        if (el.className && typeof el.className === 'string') {
-          el.className.split(' ').forEach(c => {
-            if (c.length > 2) classNames.add(c);
-          });
-        }
-      });
-      result.structure = Array.from(classNames).filter(c =>
-        c.match(/chat|msg|message|list|item|content|record|history|talk|im|dialog/)
-      ).join(', ');
-
-      // 获取页面文本的前2000字符用于分析
-      result.allTextSample = document.body.innerText.slice(0, 2000);
-
-      // 尝试直接获取表格内容
-      const tables = document.querySelectorAll('table');
-      if (tables.length > 0) {
-        tables.forEach((table, idx) => {
-          table.querySelectorAll('tr').forEach((tr, rowIdx) => {
-            const cells = tr.querySelectorAll('td, th');
-            const rowText = Array.from(cells).map(c => c.innerText.trim()).join(' | ');
-            if (rowText.length > 5) {
-              result.chatTexts.push('TABLE' + idx + '_ROW' + rowIdx + ': ' + rowText.slice(0, 200));
-            }
-          });
-        });
-      }
-
-      return JSON.stringify(result);
-    })()`;
-
-    const result = await chrome.debugger.sendCommand(debuggee, 'Runtime.evaluate', {
-      expression: expression,
-      returnByValue: true
-    });
-
-    await chrome.debugger.detach(debuggee);
-
-    let debugInfo = {};
-    try {
-      debugInfo = JSON.parse(result.result.value || '{}');
-    } catch(e) {}
-
-    // 显示调试信息
-    resultEl.style.background = '#e3f2fd';
-    resultEl.style.color = '#1565c0';
-    resultEl.textContent = '页面类名: ' + (debugInfo.structure || '无') + ' | 表格内容: ' + (debugInfo.chatTexts?.length || 0) + ' 行';
-
-    // 将调试信息保存以便查看
-    collectedChats = [{ message: '调试信息-类名: ' + debugInfo.structure, buyer: '系统', time: '', category: '其他' }];
-    if (debugInfo.chatTexts) {
-      debugInfo.chatTexts.forEach(t => {
-        collectedChats.push({ message: t, buyer: '调试', time: '', category: '其他' });
-      });
-    }
-    if (debugInfo.allTextSample) {
-      collectedChats.push({ message: '页面文本前500字: ' + debugInfo.allTextSample.slice(0, 500), buyer: '调试', time: '', category: '其他' });
-    }
-
-  } catch (e) {
-    resultEl.style.background = '#fff8e1';
-    resultEl.style.color = '#f57f17';
-    resultEl.textContent = '采集失败: ' + e.message;
-  }
-};
-
-document.getElementById('chatSaveBtn').onclick = async function() {
-  if (collectedChats.length === 0) {
-    const el = document.getElementById('chatCollectResult');
-    el.style.display = 'block';
-    el.style.background = '#fff8e1';
-    el.style.color = '#f57f17';
-    el.textContent = '请先采集聊天记录';
-    return;
-  }
-  try {
-    await fetch('http://127.0.0.1:8765/api/return/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orders: [], chats: collectedChats, export_time: new Date().toISOString(), source: 'chat_collect' })
-    });
-    const el = document.getElementById('chatCollectResult');
-    el.style.background = '#e8f5e9';
-    el.style.color = '#2e7d32';
-    el.textContent = '已保存 ' + collectedChats.length + ' 条聊天记录到分析系统!';
-  } catch (e) {
-    const el = document.getElementById('chatCollectResult');
-    el.style.background = '#fee';
-    el.style.color = '#e74c3c';
-    el.textContent = '保存失败: Agent未运行';
-  }
-};
-
-document.getElementById('saveBtn').onclick = async function() {
-  if (collectedReturnOrders.length === 0) {
-    showResult('请先采集数据', '#fff8e1', '#f57f17');
-    return;
-  }
-  try {
-    await fetch('http://127.0.0.1:8765/api/return/save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orders: collectedReturnOrders, chats: [], export_time: new Date().toISOString() })
-    });
-    showResult('已保存 ' + collectedReturnOrders.length + ' 条到分析系统!', '#e8f5e9', '#2e7d32');
-  } catch (e) {
-    showResult('保存失败: Agent未运行', '#fee', '#e74c3c');
-  }
-};
-
-function showResult(msg, bg, color) {
-  const el = document.getElementById('collectResult');
-  el.style.display = 'block';
-  el.style.background = bg;
-  el.style.color = color;
-  el.textContent = msg;
-}
 
 async function checkStatus() {
   try {
     await fetch('http://127.0.0.1:8765/api/status');
     document.getElementById('status').className = 'pill ok';
     document.getElementById('statusText').innerText = '就绪';
+    document.getElementById('agentTip').style.display = 'none';
   } catch (e) {
     document.getElementById('status').className = 'pill warn';
     document.getElementById('statusText').innerText = 'Agent未运行';
+    document.getElementById('agentTip').style.display = 'block';
   }
   autoCapture();
 }
+
+// 打开退货分析按钮
+document.getElementById('openAnalysisBtn').onclick = async function() {
+  try {
+    await fetch('http://127.0.0.1:8765/api/status');
+    window.open('http://127.0.0.1:8765/return_analysis', '_blank');
+  } catch (e) {
+    document.getElementById('agentTip').style.display = 'block';
+  }
+};
+
+// 启动Agent按钮
+document.getElementById('startAgentBtn').onclick = async function() {
+  const btn = this;
+  const originalText = btn.textContent;
+  btn.textContent = '启动中...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('http://127.0.0.1:8766/api/watcher/start', { method: 'POST' });
+    const data = await res.json();
+    
+    if (data.status === 'started' || data.status === 'already_running') {
+      btn.textContent = '已启动';
+      for (let i = 0; i < 15; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+          await fetch('http://127.0.0.1:8765/api/status');
+          btn.textContent = '就绪';
+          checkStatus();
+          window.open('http://127.0.0.1:8765/return_analysis', '_blank');
+          break;
+        } catch (e) {}
+      }
+    } else {
+      btn.textContent = '启动失败';
+    }
+  } catch (e) {
+    btn.textContent = '未连接';
+    document.getElementById('agentTip').style.display = 'block';
+  }
+
+  btn.disabled = false;
+  setTimeout(() => { btn.textContent = originalText; }, 3000);
+};
+
+// 店铺商品导出
+document.getElementById('goodsCollectBtn').onclick = async function() {
+  const resultEl = document.getElementById('goodsCollectResult');
+  const progressBar = document.getElementById('goodsProgressBar');
+  const progressEl = document.getElementById('goodsProgress');
+  const goodsList = document.getElementById('goodsList');
+  
+  resultEl.style.display = 'block';
+  resultEl.style.background = '#e3f2fd';
+  resultEl.style.color = '#1565c0';
+  resultEl.textContent = '正在采集商品数据...';
+  progressEl.style.display = 'block';
+  progressBar.style.width = '0%';
+  goodsList.style.display = 'block';
+  goodsList.innerHTML = '';
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url.includes('yangkeduo.com')) {
+      resultEl.style.background = '#fff8e1';
+      resultEl.style.color = '#f57f17';
+      resultEl.textContent = '请先打开拼多多店铺页面';
+      progressEl.style.display = 'none';
+      return;
+    }
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const results = [];
+        const seen = new Set();
+        const cards = document.querySelectorAll('div[class*="goodsItem_"]');
+        
+        cards.forEach(card => {
+          const text = card.innerText || '';
+          if (text.length < 10) return;
+          const goods = { goods_id: '', goods_name: '', price: '', sales: '', raw: text.slice(0, 200) };
+          
+          const priceMatch = text.match(/[¥￥]\s*(\d+\.?\d*)/);
+          if (priceMatch) goods.price = '¥' + priceMatch[1];
+          
+          const salesMatch = text.match(/已抢([\d,.]+件)/) || text.match(/([\d,.]+万人已拼)/) || text.match(/([\d,.]+)人已拼/);
+          if (salesMatch) goods.sales = salesMatch[0];
+          
+          const nameEl = card.querySelector('div[class*="goodsName_"]');
+          if (nameEl) {
+            const img = nameEl.querySelector('img');
+            const nameText = nameEl.innerText || (img ? img.alt : '') || '';
+            goods.goods_name = nameText.replace(/^[^a-zA-Z\u4e00-\u9fa5]+/, '').trim().substring(0, 80);
+          }
+          
+          if (!goods.goods_name) {
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5 && !l.match(/[¥￥]|已抢|百亿补贴|秒杀|品牌|预计|正品|收藏/));
+            if (lines.length > 0) goods.goods_name = lines[0].substring(0, 80);
+          }
+          
+          if (!goods.goods_id) {
+            const keys = Object.keys(card);
+            for (const key of keys) {
+              if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
+                try {
+                  let fiber = card[key];
+                  for (let i = 0; i < 15 && fiber; i++) {
+                    const props = fiber.memoizedProps || fiber.pendingProps || {};
+                    const tracking = props.trackingInfo || props.extraImprParams || {};
+                    if (tracking.rec_goods_id) {
+                      goods.goods_id = String(tracking.rec_goods_id);
+                      break;
+                    }
+                    if (props.goodsId || props.goods_id || props.goodsID) {
+                      goods.goods_id = String(props.goodsId || props.goods_id || props.goodsID);
+                      break;
+                    }
+                    fiber = fiber.return;
+                  }
+                } catch(e) {}
+              }
+              if (goods.goods_id) break;
+            }
+          }
+          
+          const key = (goods.goods_name || '') + '|' + (goods.price || '');
+          if (key !== '|' && !seen.has(key)) {
+            seen.add(key);
+            results.push(goods);
+          }
+        });
+        
+        return results;
+      }
+    });
+
+    const goods = results[0]?.result || [];
+    collectedShopGoods = goods;
+
+    goods.forEach(g => {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'goods-item';
+      itemDiv.innerHTML = `
+        <span class="goods-name" title="${(g.goods_name || '').replace(/"/g, '&quot;')}">${g.goods_id ? '[' + g.goods_id + '] ' : ''}${g.goods_name || '未知商品'}</span>
+        <span class="goods-price">${g.price || '未知价格'}</span>
+      `;
+      goodsList.appendChild(itemDiv);
+    });
+
+    progressBar.style.width = '100%';
+    resultEl.style.background = '#e8f5e9';
+    resultEl.style.color = '#2e7d32';
+    resultEl.textContent = '采集到 ' + goods.length + ' 个商品';
+    setTimeout(() => { progressEl.style.display = 'none'; }, 1000);
+
+  } catch (e) {
+    resultEl.style.background = '#fee';
+    resultEl.style.color = '#e74c3c';
+    resultEl.textContent = '采集失败: ' + e.message;
+    progressEl.style.display = 'none';
+  }
+};
+
+document.getElementById('goodsExportBtn').onclick = function() {
+  if (collectedShopGoods.length === 0) {
+    const el = document.getElementById('goodsCollectResult');
+    el.style.display = 'block';
+    el.style.background = '#fff8e1';
+    el.style.color = '#f57f17';
+    el.textContent = '请先采集商品数据';
+    return;
+  }
+
+  const headers = ['商品ID', '商品名称', '价格', '销量'];
+  const csvRows = [headers.join(',')];
+
+  collectedShopGoods.forEach(goods => {
+    const row = [
+      goods.goods_id,
+      '"' + (goods.goods_name || '').replace(/"/g, '""') + '"',
+      goods.price,
+      '"' + (goods.sales || '').replace(/"/g, '""') + '"'
+    ];
+    csvRows.push(row.join(','));
+  });
+
+  const csvContent = '\uFEFF' + csvRows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'pdd_shop_goods_' + new Date().toISOString().slice(0, 10) + '.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+
+  const el = document.getElementById('goodsCollectResult');
+  el.style.display = 'block';
+  el.style.background = '#e8f5e9';
+  el.style.color = '#2e7d32';
+  el.textContent = '已导出 ' + collectedShopGoods.length + ' 个商品到CSV文件';
+};
+
+// 商家商品活动价导出
+document.getElementById('merchantGoodsCollectBtn').onclick = async function() {
+  const resultEl = document.getElementById('merchantGoodsCollectResult');
+  const progressBar = document.getElementById('merchantGoodsProgressBar');
+  const progressEl = document.getElementById('merchantGoodsProgress');
+  
+  resultEl.style.display = 'block';
+  resultEl.style.background = '#e3f2fd';
+  resultEl.style.color = '#1565c0';
+  resultEl.textContent = '正在采集商品数据...';
+  progressEl.style.display = 'block';
+  progressBar.style.width = '0%';
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url.includes('mms.pinduoduo.com')) {
+      resultEl.style.background = '#fff8e1';
+      resultEl.style.color = '#f57f17';
+      resultEl.textContent = '请先打开商家后台商品页面';
+      progressEl.style.display = 'none';
+      return;
+    }
+
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const results = [];
+        const tableSelectors = ['table', '.ant-table', '[class*="goods-list"]', '[class*="product-list"]', '[class*="table"]'];
+
+        for (const selector of tableSelectors) {
+          const tables = document.querySelectorAll(selector);
+          if (tables.length > 0) {
+            tables.forEach(table => {
+              const headerCells = table.querySelectorAll('th, .ant-table-thead th');
+              const headers = Array.from(headerCells).map(h => h.innerText.trim());
+
+              table.querySelectorAll('tbody tr, .ant-table-row').forEach(tr => {
+                const cells = tr.querySelectorAll('td, .ant-table-cell');
+                const rowText = Array.from(cells).map(c => c.innerText.trim()).join(' | ');
+                const goods = { goods_id: '', goods_name: '', original_price: '', activity_price: '', final_price: '', sales: '', status: '', raw: rowText.slice(0, 300) };
+
+                headers.forEach((h, i) => {
+                  if (i >= cells.length) return;
+                  const val = cells[i].innerText.trim();
+                  const headerLower = h.toLowerCase();
+                  if (headerLower.includes('商品id') || headerLower.includes('goods_id')) goods.goods_id = val;
+                  else if (headerLower.includes('商品名称') || headerLower.includes('商品名')) goods.goods_name = val;
+                  else if (headerLower.includes('原价') || headerLower.includes('市场价')) goods.original_price = val;
+                  else if (headerLower.includes('活动价') || headerLower.includes('促销价')) goods.activity_price = val;
+                  else if (headerLower.includes('到手价') || headerLower.includes('实付')) goods.final_price = val;
+                  else if (headerLower.includes('销量') || headerLower.includes('已售')) goods.sales = val;
+                  else if (headerLower.includes('状态')) goods.status = val;
+                });
+
+                if (!goods.goods_id) {
+                  const idMatch = rowText.match(/(\d{10,})/);
+                  if (idMatch) goods.goods_id = idMatch[1];
+                }
+
+                if (!goods.goods_name) {
+                  let maxLen = 0;
+                  cells.forEach(cell => {
+                    const text = cell.innerText.trim();
+                    if (text.length > maxLen && text.length < 100) {
+                      maxLen = text.length;
+                      goods.goods_name = text;
+                    }
+                  });
+                }
+
+                const pricePatterns = [/(\d+\.?\d+)\s*元/g, /[¥￥]\s*(\d+\.?\d+)/g, /(\d+\.?\d+)\s*¥/g];
+                const prices = [];
+                pricePatterns.forEach(pattern => {
+                  const matches = rowText.matchAll(pattern);
+                  for (const match of matches) prices.push(parseFloat(match[1]));
+                });
+                if (prices.length >= 2) {
+                  goods.original_price = prices[0].toString();
+                  goods.activity_price = prices[1].toString();
+                  if (prices.length >= 3) goods.final_price = prices[2].toString();
+                } else if (prices.length === 1) goods.activity_price = prices[0].toString();
+
+                const salesMatch = rowText.match(/(\d+\.?\d*)\s*(?:万\+?|件|销量|已售)/);
+                if (salesMatch) goods.sales = salesMatch[0];
+
+                if (goods.goods_id || goods.goods_name) results.push(goods);
+              });
+            });
+            break;
+          }
+        }
+        return results;
+      }
+    });
+
+    const goods = results[0]?.result || [];
+    collectedMerchantGoods = goods;
+
+    progressBar.style.width = '100%';
+    resultEl.style.background = '#e8f5e9';
+    resultEl.style.color = '#2e7d32';
+    resultEl.textContent = '采集到 ' + goods.length + ' 个商品';
+    setTimeout(() => { progressEl.style.display = 'none'; }, 1000);
+
+  } catch (e) {
+    resultEl.style.background = '#fee';
+    resultEl.style.color = '#e74c3c';
+    resultEl.textContent = '采集失败: ' + e.message;
+    progressEl.style.display = 'none';
+  }
+};
+
+document.getElementById('merchantGoodsExportBtn').onclick = function() {
+  if (collectedMerchantGoods.length === 0) {
+    const el = document.getElementById('merchantGoodsCollectResult');
+    el.style.display = 'block';
+    el.style.background = '#fff8e1';
+    el.style.color = '#f57f17';
+    el.textContent = '请先采集商品数据';
+    return;
+  }
+
+  const headers = ['商品ID', '商品名称', '原价', '活动价', '到手价', '销量', '状态'];
+  const csvRows = [headers.join(',')];
+
+  collectedMerchantGoods.forEach(goods => {
+    const row = [
+      goods.goods_id,
+      '"' + (goods.goods_name || '').replace(/"/g, '""') + '"',
+      goods.original_price,
+      goods.activity_price,
+      goods.final_price,
+      goods.sales,
+      goods.status
+    ];
+    csvRows.push(row.join(','));
+  });
+
+  const csvContent = '\uFEFF' + csvRows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'pdd_goods_activity_price_' + new Date().toISOString().slice(0, 10) + '.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+
+  const el = document.getElementById('merchantGoodsCollectResult');
+  el.style.display = 'block';
+  el.style.background = '#e8f5e9';
+  el.style.color = '#2e7d32';
+  el.textContent = '已导出 ' + collectedMerchantGoods.length + ' 个商品到CSV文件';
+};
